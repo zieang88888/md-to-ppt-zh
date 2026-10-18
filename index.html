@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown PPT · 一键把 Markdown 变成幻灯片</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0f172a; --panel: #1e293b; --panel2: #334155;
+  --text: #e2e8f0; --accent: #38bdf8; --accent2: #818cf8;
+  --border: #475569;
+}
+body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+#app { display: flex; height: 100vh; }
+#editorPane { width: 38%; min-width: 320px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); }
+#previewPane { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: radial-gradient(circle at 30% 20%, #1e293b, #0f172a); }
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.toolbar h1 { font-size: 15px; margin-right: auto; }
+.toolbar h1 span { color: var(--accent); }
+.btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; transition: .2s; }
+.btn:hover { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #0f172a; border: none; font-weight: 600; }
+#editor { flex: 1; background: var(--panel); border: none; outline: none; resize: none; color: var(--text); padding: 14px; font-family: "Cascadia Code", Consolas, monospace; font-size: 14px; line-height: 1.7; }
+#slide { width: 92%; max-width: 960px; aspect-ratio: 16 / 9; background: #0b1120; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.5); padding: 56px 64px; overflow: hidden; position: relative; }
+#slide h1 { font-size: 44px; margin-bottom: 24px; color: #fff; }
+#slide h2 { font-size: 32px; margin-bottom: 18px; color: var(--accent); }
+#slide h3 { font-size: 24px; margin-bottom: 14px; }
+#slide p { font-size: 20px; line-height: 1.8; margin-bottom: 14px; color: var(--text); }
+#slide ul, #slide ol { font-size: 20px; line-height: 2; padding-left: 1.4em; margin-bottom: 14px; }
+#slide li::marker { color: var(--accent); }
+#slide blockquote { border-left: 5px solid var(--accent); background: rgba(56,189,248,.08); padding: 16px 22px; font-size: 20px; border-radius: 0 10px 10px 0; margin-bottom: 16px; }
+#slide code { background: var(--panel2); padding: 3px 8px; border-radius: 6px; font-size: .85em; font-family: Consolas, monospace; }
+#slide pre { background: var(--panel2); padding: 18px 22px; border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+#slide pre code { background: none; padding: 0; font-size: 15px; line-height: 1.7; color: #a5f3fc; }
+#slide table { border-collapse: collapse; font-size: 16px; width: 100%; margin-bottom: 16px; }
+#slide th, #slide td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+#slide th { background: var(--panel2); }
+#slide img { max-width: 100%; border-radius: 10px; }
+#pageNum { position: absolute; bottom: 20px; right: 24px; font-size: 14px; color: #64748b; }
+#slideNav { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; align-items: center; background: rgba(15,23,42,.9); border: 1px solid var(--border); padding: 8px 16px; border-radius: 999px; }
+.navBtn { background: none; border: none; color: var(--text); font-size: 18px; cursor: pointer; padding: 2px 8px; }
+.navBtn:hover { color: var(--accent); }
+#count { font-size: 13px; color: #94a3b8; }
+#editToggle { position: absolute; top: 20px; right: 24px; }
+#editorPane.hidden { display: none; }
+#previewPane.full { flex: 1 1 100%; }
+#slide.paper { background: #fff; color: #1e293b; }
+#slide.paper h1 { color: #0f172a; }
+#slide.paper h2 { color: #0284c7; }
+#slide.paper blockquote { background: rgba(2,132,199,.08); border-left-color: #0284c7; }
+#slide.paper pre { background: #f1f5f9; }
+#slide.paper pre code { color: #0f172a; }
+#slide.paper code { background: #e2e8f0; }
+#slide.paper th { background: #f1f5f9; }
+#themeBtn { display: flex; align-items: center; }
+.toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #0f172a; padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; opacity: 0; transition: .3s; pointer-events: none; z-index: 99; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="editorPane">
+    <div class="toolbar">
+      <h1>Markdown <span>→</span> PPT</h1>
+      <button class="btn" id="applyBtn">应用</button>
+      <button class="btn" id="themeBtn">☀ 浅色</button>
+      <button class="btn primary" id="fullBtn">▶ 放映</button>
+      <button class="btn" id="pdfBtn">导出 PDF</button>
+    </div>
+    <textarea id="editor" spellcheck="false"># 用 Markdown 写 PPT
+
+> 写技术分享、项目汇报，再也不用手动排版了！
+
+---
+
+## 为什么用 Markdown 写 PPT？
+
+- **纯文本写作**：专注内容，不用拖拽排版
+- **自动分页**：一个 `---` 就是一页
+- **代码友好**：代码块自动高亮
+- **随处可用**：GitHub / 掘金 / 语雀都能写
+
+---
+
+## 语法超简单
+
+### 标题即页面主题
+
+- `#` 大标题
+- `##` 副标题
+- `-` 列表自动排版
+- `---` 分页符
+
+```markdown
+# 页面标题
+- 要点一
+- 要点二
+```
+
+---
+
+## 三步上手
+
+1. **左侧**写 Markdown
+2. 点「应用」实时预览
+3. 点「放映」全屏展示
+
+> 写完后一键导出 PDF，汇报直接用！
+</textarea>
+    </div>
+  <div id="previewPane">
+    <div id="slide"></div>
+    <div id="slideNav">
+      <button class="navBtn" id="prevBtn">‹</button>
+      <span id="count">1 / 1</span>
+      <button class="navBtn" id="nextBtn">›</button>
+    </div>
+    <div id="pageNum">MD → PPT</div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  var editor = document.getElementById('editor');
+  var slide = document.getElementById('slide');
+  var count = document.getElementById('count');
+  var toast = document.getElementById('toast');
+  var pages = [];
+  var current = 0;
+
+  function parsePages() {
+    var raw = editor.value;
+    var blocks = raw.split(/\n---\s*\n/);
+    pages = blocks.map(function (b) { return b.trim(); }).filter(function (b) { return b.length > 0; });
+    if (pages.length === 0) pages = ['# 空白页\n\n> 在左侧输入 Markdown，点击「应用」生成幻灯片'];
+    current = 0;
+  }
+
+  function render() {
+    if (pages.length === 0) return;
+    var md = pages[current];
+    var html = marked.parse(md, { breaks: true, gfm: true });
+    slide.innerHTML = html;
+    count.textContent = (current + 1) + ' / ' + pages.length;
+  }
+
+  function go(n) {
+    current = Math.max(0, Math.min(pages.length - 1, n));
+    render();
+  }
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function () { toast.classList.remove('show'); }, 1600);
+  }
+
+  document.getElementById('applyBtn').addEventListener('click', function () {
+    parsePages();
+    render();
+    showToast('已生成 ' + pages.length + ' 页幻灯片');
+  });
+
+  document.getElementById('prevBtn').addEventListener('click', function () { go(current - 1); });
+  document.getElementById('nextBtn').addEventListener('click', function () { go(current + 1); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(current + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(current - 1); }
+    if (e.key === 'Home') { e.preventDefault(); go(0); }
+    if (e.key === 'End') { e.preventDefault(); go(pages.length - 1); }
+  });
+
+  var isLight = false;
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    isLight = !isLight;
+    slide.classList.toggle('paper', isLight);
+    this.textContent = isLight ? '🌙 深色' : '☀ 浅色';
+  });
+
+  var isFull = false;
+  document.getElementById('fullBtn').addEventListener('click', function () {
+    isFull = !isFull;
+    var ep = document.getElementById('editorPane');
+    var pp = document.getElementById('previewPane');
+    ep.classList.toggle('hidden', isFull);
+    pp.classList.toggle('full', isFull);
+    this.textContent = isFull ? '✕ 退出' : '▶ 放映';
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
+  });
+
+  document.getElementById('pdfBtn').addEventListener('click', function () {
+    var printStyle = document.createElement('style');
+    printStyle.id = 'printStyle';
+    printStyle.textContent = '@media print { body { visibility: hidden; } #slide { visibility: visible; position: fixed; inset: 0; width: 100%; max-width: none; aspect-ratio: auto; height: 100vh; border-radius: 0; box-shadow: none; padding: 40px 56px; } }';
+    var old = document.getElementById('printStyle');
+    if (old) old.remove();
+    document.head.appendChild(printStyle);
+    window.print();
+    setTimeout(function () { var s = document.getElementById('printStyle'); if (s) s.remove(); }, 2000);
+  });
+
+  parsePages();
+  render();
+})();
+</script>
+</body>
+</html>
